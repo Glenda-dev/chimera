@@ -61,7 +61,7 @@ impl<'a> SystemService for ChimeraManager<'a> {
             match self.endpoint.recv(&mut utcb) {
                 Ok(_) => {}
                 Err(e) => {
-                    error!("Chimera recv error: {:?}", e);
+                    error!("recv error: {:?}", e);
                     continue;
                 }
             }
@@ -72,7 +72,7 @@ impl<'a> SystemService for ChimeraManager<'a> {
                     if e == Error::Success {
                         continue;
                     }
-                    error!("Chimera dispatch error: {:?}", e);
+                    error!("dispatch error: {:?}", e);
                     utcb.set_msg_tag(MsgTag::err());
                     utcb.set_mr(0, e as usize);
                 }
@@ -80,7 +80,7 @@ impl<'a> SystemService for ChimeraManager<'a> {
 
             if let Err(e) = self.reply(&mut utcb) {
                 if e != Error::InvalidCapability {
-                    error!("Chimera reply failed: {:?}", e);
+                    error!("reply failed: {:?}", e);
                 }
             }
         }
@@ -127,6 +127,7 @@ impl<'a> SystemService for ChimeraManager<'a> {
 
     fn stop(&mut self) {
         self.running = false;
-        let _ = self.init_client.report_service(Badge::null(), protocol::init::ServiceState::Stopped);
+        let _ =
+            self.init_client.report_service(Badge::null(), protocol::init::ServiceState::Stopped);
     }
 }
