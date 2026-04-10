@@ -1,4 +1,4 @@
-use glenda::cap::{CapPtr, Endpoint, Reply};
+use glenda::cap::{CSPACE_CAP, CapPtr, Endpoint, Reply};
 use glenda::client::{InitClient, ResourceClient};
 use glenda::error::Error;
 use glenda::interface::{FaultService, InitService, ResourceService, SystemService};
@@ -70,6 +70,7 @@ impl<'a> SystemService for ChimeraManager<'a> {
                 Ok(()) => {}
                 Err(e) => {
                     if e == Error::Success {
+                        let _ = CSPACE_CAP.delete(self.reply.cap());
                         continue;
                     }
                     error!("dispatch error: {:?}", e);
