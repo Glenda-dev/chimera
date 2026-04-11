@@ -6,13 +6,17 @@ use glenda::ipc::{Badge, MsgTag, UTCB};
 use glenda::protocol;
 use glenda::protocol::resource::{CHIMERA_ENDPOINT, ResourceType};
 
-pub struct ChimeraManager<'a> {
-    pub res_client: &'a mut ResourceClient,
-    pub init_client: &'a mut InitClient,
+pub struct ChimeraIpc {
     pub endpoint: Endpoint,
     pub reply: Reply,
     pub recv: CapPtr,
     pub running: bool,
+}
+
+pub struct ChimeraManager<'a> {
+    pub res_client: &'a mut ResourceClient,
+    pub init_client: &'a mut InitClient,
+    pub ipc: ChimeraIpc,
 }
 
 impl<'a> ChimeraManager<'a> {
@@ -20,10 +24,12 @@ impl<'a> ChimeraManager<'a> {
         Self {
             res_client,
             init_client,
-            endpoint: Endpoint::from(CapPtr::null()),
-            reply: Reply::from(CapPtr::null()),
-            recv: CapPtr::null(),
-            running: false,
+            ipc: ChimeraIpc {
+                endpoint: Endpoint::from(CapPtr::null()),
+                reply: Reply::from(CapPtr::null()),
+                recv: CapPtr::null(),
+                running: false,
+            },
         }
     }
 }
@@ -35,9 +41,9 @@ impl<'a> SystemService for ChimeraManager<'a> {
     }
 
     fn listen(&mut self, ep: Endpoint, reply: CapPtr, recv: CapPtr) -> Result<(), Error> {
-        self.endpoint = ep;
-        self.reply = Reply::from(reply);
-        self.recv = recv;
+        self.ipc.endpoint = ep;
+        self.ipc.reply = Reply::from(reply);
+        self.ipc.recv = recv;
         self.res_client.register_cap(
             Badge::null(),
             ResourceType::Endpoint,
@@ -48,17 +54,20 @@ impl<'a> SystemService for ChimeraManager<'a> {
     }
 
     fn run(&mut self) -> Result<(), Error> {
-        if self.endpoint.cap().is_null() || self.reply.cap().is_null() || self.recv.is_null() {
+        if self.ipc.endpoint.cap().is_null()
+            || self.ipc.reply.cap().is_null()
+            || self.ipc.recv.is_null()
+        {
             return Err(Error::NotInitialized);
         }
         self.init_client.report_service(Badge::null(), protocol::init::ServiceState::Running)?;
-        self.running = true;
-        while self.running {
+        self.ipc.running = true;
+        while self.ipc.running {
             let mut utcb = unsafe { UTCB::new() };
             utcb.clear();
-            utcb.set_reply_window(self.reply.cap());
-            utcb.set_recv_window(self.recv);
-            match self.endpoint.recv(&mut utcb) {
+            utcb.set_reply_window(self.ipc.reply.cap());
+            utcb.set_recv_window(self.ipc.recv);
+            match self.ipc.endpoint.recv(&mut utcb) {
                 Ok(_) => {}
                 Err(e) => {
                     error!("recv error: {:?}", e);
@@ -70,7 +79,7 @@ impl<'a> SystemService for ChimeraManager<'a> {
                 Ok(()) => {}
                 Err(e) => {
                     if e == Error::Success {
-                        let _ = CSPACE_CAP.delete(self.reply.cap());
+                        let _ = CSPACE_CAP.delete(self.ipc.reply.cap());
                         continue;
                     }
                     error!("dispatch error: {:?}", e);
@@ -123,11 +132,11 @@ impl<'a> SystemService for ChimeraManager<'a> {
     }
 
     fn reply(&mut self, utcb: &mut UTCB) -> Result<(), Error> {
-        self.reply.reply(utcb)
+        self.ipc.reply.reply(utcb)
     }
 
     fn stop(&mut self) {
-        self.running = false;
+        self.ipc.running = false;
         let _ =
             self.init_client.report_service(Badge::null(), protocol::init::ServiceState::Stopped);
     }
